@@ -116,119 +116,166 @@
     </div>
     
     <script>
-        fetch('/api/summary')
-            .then(res => res.json())
-            .then(data => {
-                if (data.code === 0) {
-                    document.getElementById('total-students').textContent = data.data.total_students;
-                    document.getElementById('total-courses').textContent = data.data.total_courses;
-                    document.getElementById('total-behaviors').textContent = data.data.total_behaviors.toLocaleString();
-                    document.getElementById('total-hours').innerHTML = data.data.total_study_hours.toLocaleString() + '<span>小时</span>';
-                    document.getElementById('avg-hours').innerHTML = data.data.avg_study_hours + '<span>小时</span>';
-                    document.getElementById('active-rate').innerHTML = data.data.active_rate + '<span>%</span>';
-                }
-            });
+        // 图表实例
+        let courseChart, timeChart, behaviorChart, rankingChart;
         
-        fetch('/api/course_popularity')
-            .then(res => res.json())
-            .then(data => {
-                if (data.code === 0) {
-                    const chart = echarts.init(document.getElementById('course-chart'));
-                    chart.setOption({
-                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-                        xAxis: { type: 'value' },
-                        yAxis: { type: 'category', data: data.data.map(d => d.course_name).reverse() },
-                        series: [{
-                            type: 'bar',
-                            data: data.data.map(d => d.student_count).reverse(),
-                            itemStyle: { color: '#1e3c72' }
-                        }]
-                    });
-                }
-            });
+        // 加载概要数据
+        function loadSummary() {
+            fetch('/api/summary')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        document.getElementById('total-students').textContent = data.data.total_students;
+                        document.getElementById('total-courses').textContent = data.data.total_courses;
+                        document.getElementById('total-behaviors').textContent = data.data.total_behaviors.toLocaleString();
+                        document.getElementById('total-hours').innerHTML = data.data.total_study_hours.toLocaleString() + '<span>小时</span>';
+                        document.getElementById('avg-hours').innerHTML = data.data.avg_study_hours + '<span>小时</span>';
+                        document.getElementById('active-rate').innerHTML = data.data.active_rate + '<span>%</span>';
+                    }
+                });
+        }
         
-        fetch('/api/time_distribution')
-            .then(res => res.json())
-            .then(data => {
-                if (data.code === 0) {
-                    const chart = echarts.init(document.getElementById('time-chart'));
-                    chart.setOption({
-                        tooltip: { trigger: 'axis' },
-                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-                        xAxis: { type: 'category', data: data.data.map(d => d.hour + '时') },
-                        yAxis: { type: 'value' },
-                        series: [{
-                            type: 'line',
-                            data: data.data.map(d => d.count),
-                            smooth: true,
-                            areaStyle: { color: 'rgba(30, 60, 114, 0.3)' },
-                            lineStyle: { color: '#1e3c72' },
-                            itemStyle: { color: '#1e3c72' }
-                        }]
-                    });
-                }
-            });
+        // 初始加载
+        loadSummary();
         
-        fetch('/api/behavior_distribution')
-            .then(res => res.json())
-            .then(data => {
-                if (data.code === 0) {
-                    const chart = echarts.init(document.getElementById('behavior-chart'));
-                    chart.setOption({
-                        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-                        legend: { orient: 'vertical', left: 'left' },
-                        series: [{
-                            type: 'pie',
-                            radius: ['40%', '70%'],
-                            avoidLabelOverlap: false,
-                            itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
-                            label: { show: false },
-                            emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
-                            data: data.data.map(d => ({ value: d.count, name: d.name }))
-                        }]
-                    });
-                }
-            });
+        // 加载课程热度
+        function loadCoursePopularity() {
+            fetch('/api/course_popularity')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        if (!courseChart) {
+                            courseChart = echarts.init(document.getElementById('course-chart'));
+                        }
+                        courseChart.setOption({
+                            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                            xAxis: { type: 'value' },
+                            yAxis: { type: 'category', data: data.data.map(d => d.course_name).reverse() },
+                            series: [{
+                                type: 'bar',
+                                data: data.data.map(d => d.student_count).reverse(),
+                                itemStyle: { color: '#1e3c72' }
+                            }]
+                        });
+                    }
+                });
+        }
+        loadCoursePopularity();
         
-        fetch('/api/student_ranking?limit=10')
-            .then(res => res.json())
-            .then(data => {
-                if (data.code === 0) {
-                    const chart = echarts.init(document.getElementById('ranking-chart'));
-                    chart.setOption({
-                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-                        xAxis: { type: 'value', name: '学习时长(小时)' },
-                        yAxis: { type: 'category', data: data.data.map(d => d.student_name).reverse() },
-                        series: [{
-                            type: 'bar',
-                            data: data.data.map(d => d.total_hours).reverse(),
-                            itemStyle: { color: '#2a5298' }
-                        }]
-                    });
-                }
-            });
+        // 加载时间分布
+        function loadTimeDistribution() {
+            fetch('/api/time_distribution')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        if (!timeChart) {
+                            timeChart = echarts.init(document.getElementById('time-chart'));
+                        }
+                        timeChart.setOption({
+                            tooltip: { trigger: 'axis' },
+                            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                            xAxis: { type: 'category', data: data.data.map(d => d.hour + '时') },
+                            yAxis: { type: 'value' },
+                            series: [{
+                                type: 'line',
+                                data: data.data.map(d => d.count),
+                                smooth: true,
+                                areaStyle: { color: 'rgba(30, 60, 114, 0.3)' },
+                                lineStyle: { color: '#1e3c72' },
+                                itemStyle: { color: '#1e3c72' }
+                            }]
+                        });
+                    }
+                });
+        }
+        loadTimeDistribution();
         
-        fetch('/api/alerts')
-            .then(res => res.json())
-            .then(data => {
-                if (data.code === 0) {
-                    const tbody = document.getElementById('alert-table');
-                    tbody.innerHTML = data.data.map(alert => {
-                        const typeMap = { 'inactive': '长期未学习', 'low_score': '成绩偏低', 'low_engagement': '参与度低' };
-                        const levelClass = { 'high': 'badge-high', 'medium': 'badge-medium', 'low': 'badge-low' };
-                        const levelText = { 'high': '高', 'medium': '中', 'low': '低' };
-                        return `<tr>
-                            <td>${alert.student_id}</td>
-                            <td>${alert.student_name}</td>
-                            <td>${typeMap[alert.alert_type] || alert.alert_type}</td>
-                            <td>${alert.alert_message || ''}</td>
-                            <td><span class="badge ${levelClass[alert.level]}">${levelText[alert.level]}</span></td>
-                        </tr>`;
-                    }).join('');
-                }
-            });
+        // 加载行为分布
+        function loadBehaviorDistribution() {
+            fetch('/api/behavior_distribution')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        if (!behaviorChart) {
+                            behaviorChart = echarts.init(document.getElementById('behavior-chart'));
+                        }
+                        behaviorChart.setOption({
+                            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                            legend: { orient: 'vertical', left: 'left' },
+                            series: [{
+                                type: 'pie',
+                                radius: ['40%', '70%'],
+                                avoidLabelOverlap: false,
+                                itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                                label: { show: false },
+                                emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+                                data: data.data.map(d => ({ value: d.count, name: d.name }))
+                            }]
+                        });
+                    }
+                });
+        }
+        loadBehaviorDistribution();
+        
+        // 加载学生排行
+        function loadStudentRanking() {
+            fetch('/api/student_ranking?limit=10')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        if (!rankingChart) {
+                            rankingChart = echarts.init(document.getElementById('ranking-chart'));
+                        }
+                        rankingChart.setOption({
+                            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                            xAxis: { type: 'value', name: '学习时长(小时)' },
+                            yAxis: { type: 'category', data: data.data.map(d => d.student_name).reverse() },
+                            series: [{
+                                type: 'bar',
+                                data: data.data.map(d => d.total_hours).reverse(),
+                                itemStyle: { color: '#2a5298' }
+                            }]
+                        });
+                    }
+                });
+        }
+        loadStudentRanking();
+        
+        // 加载预警
+        function loadAlerts() {
+            fetch('/api/alerts')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        const tbody = document.getElementById('alert-table');
+                        tbody.innerHTML = data.data.map(alert => {
+                            const typeMap = { 'inactive': '长期未学习', 'low_score': '成绩偏低', 'low_engagement': '参与度低' };
+                            const levelClass = { 'high': 'badge-high', 'medium': 'badge-medium', 'low': 'badge-low' };
+                            const levelText = { 'high': '高', 'medium': '中', 'low': '低' };
+                            return `<tr>
+                                <td>${alert.student_id}</td>
+                                <td>${alert.student_name}</td>
+                                <td>${typeMap[alert.alert_type] || alert.alert_type}</td>
+                                <td>${alert.alert_message || ''}</td>
+                                <td><span class="badge ${levelClass[alert.level]}">${levelText[alert.level]}</span></td>
+                            </tr>`;
+                        }).join('');
+                    }
+                });
+        }
+        loadAlerts();
+        
+        // 每5秒自动刷新所有数据
+        setInterval(function() {
+            loadSummary();
+            loadCoursePopularity();
+            loadTimeDistribution();
+            loadBehaviorDistribution();
+            loadStudentRanking();
+            loadAlerts();
+        }, 5000);
     </script>
 </body>
 </html>

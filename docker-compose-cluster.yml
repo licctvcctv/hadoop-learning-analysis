@@ -1,6 +1,6 @@
 # ============================================
-# Docker Compose - 完全分布式集群版本
-# 满足作业要求：Hadoop完全分布式集群
+# Docker Compose - Hadoop完全分布式集群
+# 组件: HDFS + YARN + Spark + Flume
 # ============================================
 version: '3.8'
 
@@ -114,63 +114,6 @@ services:
     networks:
       - hadoop-cluster
 
-  # ==================== Hive Metastore MySQL ====================
-  mysql:
-    image: mysql:5.7
-    container_name: mysql
-    hostname: mysql
-    ports:
-      - "3309:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: metastore
-      MYSQL_USER: hive
-      MYSQL_PASSWORD: hive123
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    networks:
-      - hadoop-cluster
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # ==================== Hive Server ====================
-  hive-server:
-    image: bde2020/hive:2.3.2-postgresql-metastore
-    container_name: hive-server
-    hostname: hive-server
-    ports:
-      - "10000:10000"  # HiveServer2 JDBC
-      - "10002:10002"  # HiveServer2 Web UI
-    volumes:
-      - ./scripts/hive:/scripts/hive
-    environment:
-      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:mysql://mysql:3306/metastore?createDatabaseIfNotExist=true&useSSL=false"
-      HIVE_CORE_CONF_javax_jdo_option_ConnectionDriverName: "com.mysql.jdbc.Driver"
-      HIVE_CORE_CONF_javax_jdo_option_ConnectionUserName: "hive"
-      HIVE_CORE_CONF_javax_jdo_option_ConnectionPassword: "hive123"
-      HIVE_CORE_CONF_hive_metastore_warehouse_dir: "hdfs://namenode:9000/user/hive/warehouse"
-      SERVICE_PRECONDITION: "namenode:9870 mysql:3306"
-    env_file:
-      - ./hadoop.env
-    depends_on:
-      namenode:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-    networks:
-      - hadoop-cluster
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "10000"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
-
   # ==================== Spark Master ====================
   spark-master:
     image: bde2020/spark-master:3.1.1-hadoop3.2
@@ -241,17 +184,14 @@ services:
       - ./src/spark_analysis:/app/spark_results
     working_dir: /app
     command: >
-      bash -c "pip install flask pyhive thrift thrift-sasl requests -i https://pypi.tuna.tsinghua.edu.cn/simple && python app.py"
+      bash -c "pip install flask requests -i https://pypi.tuna.tsinghua.edu.cn/simple && python app.py"
     environment:
       - FLASK_ENV=development
-      - HIVE_HOST=hive-server
-      - HIVE_PORT=10000
       - HDFS_HOST=namenode
       - HDFS_PORT=9870
       - SPARK_MASTER=spark-master
       - SPARK_PORT=8080
     depends_on:
-      - hive-server
       - spark-master
     networks:
       - hadoop-cluster
@@ -264,4 +204,3 @@ volumes:
   namenode_data:
   datanode1_data:
   datanode2_data:
-  mysql_data:

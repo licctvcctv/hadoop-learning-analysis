@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统监控 - 学习行为分析系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .header p { font-size: 14px; opacity: 0.9; }
+        .nav { background: #fff; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav a { color: #333; text-decoration: none; margin-right: 20px; padding: 8px 16px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { background: #1e3c72; color: white; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+        .section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .section-title { font-size: 18px; font-weight: bold; margin-bottom: 20px; color: #333; border-bottom: 2px solid #1e3c72; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .refresh-btn { background: #1e3c72; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .refresh-btn:hover { background: #2a5298; }
+        .cluster-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #f8f9fa; border-radius: 8px; padding: 15px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: bold; color: #1e3c72; }
+        .stat-label { font-size: 12px; color: #666; margin-top: 5px; }
+        .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; margin-top: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #1e3c72, #2a5298); border-radius: 4px; }
+        .service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .service-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; }
+        .service-header { display: flex; align-items: center; margin-bottom: 15px; }
+        .service-icon { width: 48px; height: 48px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-right: 15px; font-weight: bold; }
+        .service-icon.hdfs { background: #e3f2fd; color: #1565c0; }
+        .service-icon.yarn { background: #fff3e0; color: #ef6c00; }
+        .service-icon.spark { background: #fce4ec; color: #c2185b; }
+        .service-icon.hive { background: #e8f5e9; color: #2e7d32; }
+        .service-icon.mysql { background: #f3e5f5; color: #7b1fa2; }
+        .service-icon.flume { background: #e0f7fa; color: #00838f; }
+        .service-name { font-size: 16px; font-weight: bold; color: #333; }
+        .service-desc { font-size: 12px; color: #666; }
+        .service-info { margin-bottom: 15px; }
+        .service-info-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; }
+        .service-info-label { color: #666; font-size: 13px; }
+        .service-info-value { color: #333; font-size: 13px; font-weight: 500; }
+        .service-link { display: block; text-align: center; padding: 10px; background: #1e3c72; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; }
+        .service-link:hover { background: #2a5298; }
+        .service-link.disabled { background: #ccc; cursor: not-allowed; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .status-running { background: #e8f5e9; color: #2e7d32; }
+        .status-stopped { background: #ffebee; color: #c62828; }
+        .last-update { font-size: 12px; color: #999; font-weight: normal; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>系统监控</h1>
+        <p>Hadoop生态圈组件状态监控</p>
+    </div>
+    
+    <div class="nav">
+        <a href="/">数据概览</a>
+        <a href="/monitor" class="active">系统监控</a>
+        <a href="/logs">日志查看</a>
+    </div>
+    
+    <div class="container">
+        <div class="section">
+            <div class="section-title">
+                <span>集群资源概览</span>
+                <span>
+                    <span class="last-update" id="lastUpdate">更新中...</span>
+                    <button class="refresh-btn" onclick="refreshClusterStatus()">刷新</button>
+                </span>
+            </div>
+            <div class="cluster-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="hdfsUsedPercent">--</div>
+                    <div class="stat-label">HDFS 使用率</div>
+                    <div class="progress-bar"><div class="progress-fill" id="hdfsProgress" style="width: 0%"></div></div>
+                    <div class="stat-label" id="hdfsDetail">加载中...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="hdfsDataNodesCount">2</div>
+                    <div class="stat-label">DataNode 节点数</div>
+                    <div class="stat-label" id="hdfsDataNodesDetail">2 存活, 0 死亡</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="yarnNodesCount">2</div>
+                    <div class="stat-label">YARN NodeManager</div>
+                    <div class="stat-label" id="yarnNodesDetail">2 活跃节点</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">2</div>
+                    <div class="stat-label">Spark Worker</div>
+                    <div class="stat-label">Master + 2 Workers</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">服务组件状态</div>
+            <div class="service-grid">
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-icon hdfs">NN</div>
+                        <div>
+                            <div class="service-name">HDFS NameNode</div>
+                            <div class="service-desc">分布式文件系统主节点</div>
+                        </div>
+                    </div>
+                    <div class="service-info">
+                        <div class="service-info-item">
+                            <span class="service-info-label">状态</span>
+                            <span class="status-badge status-running" id="hdfsStatus">运行中</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">端口</span>
+                            <span class="service-info-value">9870 / 9000</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">DataNode</span>
+                            <span class="service-info-value" id="hdfsDataNodes">2 存活 / 0 死亡</span>
+                        </div>
+                    </div>
+                    <a href="http://192.168.6.115:9870" target="_blank" class="service-link">打开Web UI</a>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-icon yarn">RM</div>
+                        <div>
+                            <div class="service-name">YARN ResourceManager</div>
+                            <div class="service-desc">资源调度管理器</div>
+                        </div>
+                    </div>
+                    <div class="service-info">
+                        <div class="service-info-item">
+                            <span class="service-info-label">状态</span>
+                            <span class="status-badge status-running">运行中</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">Web UI端口</span>
+                            <span class="service-info-value">8088</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">NodeManager</span>
+                            <span class="service-info-value" id="yarnNodes">2 节点</span>
+                        </div>
+                    </div>
+                    <a href="http://192.168.6.115:8088" target="_blank" class="service-link">打开Web UI</a>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-icon spark">SP</div>
+                        <div>
+                            <div class="service-name">Spark Master</div>
+                            <div class="service-desc">分布式计算引擎</div>
+                        </div>
+                    </div>
+                    <div class="service-info">
+                        <div class="service-info-item">
+                            <span class="service-info-label">状态</span>
+                            <span class="status-badge status-running">运行中</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">运行模式</span>
+                            <span class="service-info-value">Standalone</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">Worker数量</span>
+                            <span class="service-info-value">2 Workers</span>
+                        </div>
+                    </div>
+                    <a href="http://192.168.6.115:8080" target="_blank" class="service-link">打开Web UI</a>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-icon hive">HV</div>
+                        <div>
+                            <div class="service-name">Hive Server</div>
+                            <div class="service-desc">数据仓库服务</div>
+                        </div>
+                    </div>
+                    <div class="service-info">
+                        <div class="service-info-item">
+                            <span class="service-info-label">状态</span>
+                            <span class="status-badge status-running">运行中</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">JDBC端口</span>
+                            <span class="service-info-value">10000</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">Metastore</span>
+                            <span class="service-info-value">MySQL</span>
+                        </div>
+                    </div>
+                    <a href="http://192.168.6.115:10002" target="_blank" class="service-link">打开Web UI</a>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-icon mysql">DB</div>
+                        <div>
+                            <div class="service-name">MySQL</div>
+                            <div class="service-desc">Hive元数据存储</div>
+                        </div>
+                    </div>
+                    <div class="service-info">
+                        <div class="service-info-item">
+                            <span class="service-info-label">状态</span>
+                            <span class="status-badge status-running">运行中</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">端口</span>
+                            <span class="service-info-value">3309</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">数据库</span>
+                            <span class="service-info-value">metastore</span>
+                        </div>
+                    </div>
+                    <div class="service-link disabled">无Web UI</div>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-icon flume">DG</div>
+                        <div>
+                            <div class="service-name">数据生成器</div>
+                            <div class="service-desc">学习行为数据生成</div>
+                        </div>
+                    </div>
+                    <div class="service-info">
+                        <div class="service-info-item">
+                            <span class="service-info-label">状态</span>
+                            <span class="status-badge status-running">运行中</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">生成频率</span>
+                            <span class="service-info-value">每2秒</span>
+                        </div>
+                        <div class="service-info-item">
+                            <span class="service-info-label">HDFS路径</span>
+                            <span class="service-info-value">/user/learning_behavior</span>
+                        </div>
+                    </div>
+                    <div class="service-link disabled">后台运行</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function refreshClusterStatus() {
+            fetch('/api/cluster_status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 0) {
+                        const status = data.data;
+                        const hdfs = status.hdfs;
+                        if (hdfs.status === 'running') {
+                            const usedPercent = hdfs.capacity > 0 ? ((hdfs.used / hdfs.capacity) * 100).toFixed(1) : 0;
+                            document.getElementById('hdfsUsedPercent').textContent = usedPercent + '%';
+                            document.getElementById('hdfsProgress').style.width = usedPercent + '%';
+                            document.getElementById('hdfsDetail').textContent = formatBytes(hdfs.used) + ' / ' + formatBytes(hdfs.capacity);
+                            document.getElementById('hdfsDataNodes').textContent = hdfs.live_nodes + ' 存活 / ' + hdfs.dead_nodes + ' 死亡';
+                            document.getElementById('hdfsDataNodesCount').textContent = hdfs.live_nodes;
+                            document.getElementById('hdfsDataNodesDetail').textContent = hdfs.live_nodes + ' 存活, ' + hdfs.dead_nodes + ' 死亡';
+                        }
+                        const yarn = status.yarn;
+                        if (yarn && yarn.status === 'running') {
+                            document.getElementById('yarnNodesCount').textContent = yarn.active_nodes || 2;
+                            document.getElementById('yarnNodesDetail').textContent = (yarn.active_nodes || 2) + ' 活跃节点';
+                        }
+                        document.getElementById('lastUpdate').textContent = '最后更新: ' + new Date().toLocaleTimeString();
+                    }
+                });
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshClusterStatus();
+            setInterval(refreshClusterStatus, 30000);
+        });
+    </script>
+</body>
+</html>

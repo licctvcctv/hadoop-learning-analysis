@@ -1,0 +1,6 @@
+flask==2.3.3
+pyhive==0.7.0
+thrift==0.16.0
+thrift-sasl==0.4.3
+pandas==2.0.3
+python-dotenv==1.0.0

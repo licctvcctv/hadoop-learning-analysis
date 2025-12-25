@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  YARN配置文件
+  基于Hadoop的大学生线上课程学习行为数据存储与分析系统
+-->
+<configuration>
+    <!-- ResourceManager地址 -->
+    <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>resourcemanager</value>
+        <description>ResourceManager主机名</description>
+    </property>
+    
+    <!-- ResourceManager Web UI -->
+    <property>
+        <name>yarn.resourcemanager.webapp.address</name>
+        <value>resourcemanager:8088</value>
+        <description>ResourceManager Web UI地址</description>
+    </property>
+    
+    <!-- NodeManager辅助服务 -->
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+        <description>启用MapReduce Shuffle服务</description>
+    </property>
+    
+    <property>
+        <name>yarn.nodemanager.aux-services.mapreduce_shuffle.class</name>
+        <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+    </property>
+    
+    <!-- NodeManager资源配置 -->
+    <property>
+        <name>yarn.nodemanager.resource.memory-mb</name>
+        <value>4096</value>
+        <description>NodeManager可用内存(MB)</description>
+    </property>
+    
+    <property>
+        <name>yarn.nodemanager.resource.cpu-vcores</name>
+        <value>2</value>
+        <description>NodeManager可用CPU核心数</description>
+    </property>
+    
+    <!-- 调度器配置 -->
+    <property>
+        <name>yarn.scheduler.minimum-allocation-mb</name>
+        <value>512</value>
+        <description>最小内存分配(MB)</description>
+    </property>
+    
+    <property>
+        <name>yarn.scheduler.maximum-allocation-mb</name>
+        <value>4096</value>
+        <description>最大内存分配(MB)</description>
+    </property>
+    
+    <!-- 日志聚合 -->
+    <property>
+        <name>yarn.log-aggregation-enable</name>
+        <value>true</value>
+        <description>启用日志聚合</description>
+    </property>
+    
+    <property>
+        <name>yarn.log-aggregation.retain-seconds</name>
+        <value>604800</value>
+        <description>日志保留时间(秒)，7天</description>
+    </property>
+    
+    <!-- 虚拟内存检查 -->
+    <property>
+        <name>yarn.nodemanager.vmem-check-enabled</name>
+        <value>false</value>
+        <description>关闭虚拟内存检查</description>
+    </property>
+    
+    <!-- 环境变量白名单 -->
+    <property>
+        <name>yarn.nodemanager.env-whitelist</name>
+        <value>JAVA_HOME,HADOOP_COMMON_HOME,HADOOP_HDFS_HOME,HADOOP_CONF_DIR,CLASSPATH_PREPEND_DISTCACHE,HADOOP_YARN_HOME,HADOOP_MAPRED_HOME</value>
+    </property>
+</configuration>

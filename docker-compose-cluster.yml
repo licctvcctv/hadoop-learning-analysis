@@ -1,0 +1,267 @@
+# ============================================
+# Docker Compose - 完全分布式集群版本
+# 满足作业要求：Hadoop完全分布式集群
+# ============================================
+version: '3.8'
+
+services:
+  # ==================== HDFS NameNode ====================
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode
+    ports:
+      - "9870:9870"   # HDFS Web UI
+      - "9000:9000"   # HDFS RPC
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+      - ./data/logs:/data/logs
+    environment:
+      - CLUSTER_NAME=learning-cluster
+    env_file:
+      - ./hadoop.env
+    networks:
+      - hadoop-cluster
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==================== HDFS DataNode 1 ====================
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode1
+    hostname: datanode1
+    volumes:
+      - datanode1_data:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-cluster
+
+  # ==================== HDFS DataNode 2 ====================
+  datanode2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode2
+    hostname: datanode2
+    volumes:
+      - datanode2_data:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-cluster
+
+  # ==================== YARN ResourceManager ====================
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    hostname: resourcemanager
+    ports:
+      - "8088:8088"   # YARN Web UI
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode1:9864 datanode2:9864"
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - datanode1
+      - datanode2
+    networks:
+      - hadoop-cluster
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ==================== YARN NodeManager 1 ====================
+  nodemanager1:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager1
+    hostname: nodemanager1
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode1:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - resourcemanager
+    networks:
+      - hadoop-cluster
+
+  # ==================== YARN NodeManager 2 ====================
+  nodemanager2:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager2
+    hostname: nodemanager2
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode2:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - resourcemanager
+    networks:
+      - hadoop-cluster
+
+  # ==================== Hive Metastore MySQL ====================
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    hostname: mysql
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: metastore
+      MYSQL_USER: hive
+      MYSQL_PASSWORD: hive123
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - hadoop-cluster
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ==================== Hive Server ====================
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-server
+    hostname: hive-server
+    ports:
+      - "10000:10000"  # HiveServer2 JDBC
+      - "10002:10002"  # HiveServer2 Web UI
+    volumes:
+      - ./scripts/hive:/scripts/hive
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:mysql://mysql:3306/metastore?createDatabaseIfNotExist=true&useSSL=false"
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionDriverName: "com.mysql.jdbc.Driver"
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionUserName: "hive"
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionPassword: "hive123"
+      HIVE_CORE_CONF_hive_metastore_warehouse_dir: "hdfs://namenode:9000/user/hive/warehouse"
+      SERVICE_PRECONDITION: "namenode:9870 mysql:3306"
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      namenode:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks:
+      - hadoop-cluster
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "10000"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # ==================== Spark Master ====================
+  spark-master:
+    image: bde2020/spark-master:3.1.1-hadoop3.2
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"   # Spark Master Web UI
+      - "7077:7077"   # Spark Master
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - ./src/spark_analysis:/opt/spark-apps
+      - ./data/logs:/data/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-cluster
+
+  # ==================== Spark Worker 1 ====================
+  spark-worker1:
+    image: bde2020/spark-worker:3.1.1-hadoop3.2
+    container_name: spark-worker1
+    hostname: spark-worker1
+    ports:
+      - "8081:8081"
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - ./src/spark_analysis:/opt/spark-apps
+    depends_on:
+      - spark-master
+    networks:
+      - hadoop-cluster
+
+  # ==================== Spark Worker 2 ====================
+  spark-worker2:
+    image: bde2020/spark-worker:3.1.1-hadoop3.2
+    container_name: spark-worker2
+    hostname: spark-worker2
+    ports:
+      - "8082:8081"
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - ./src/spark_analysis:/opt/spark-apps
+    depends_on:
+      - spark-master
+    networks:
+      - hadoop-cluster
+
+  # ==================== Web 可视化 ====================
+  web:
+    image: python:3.9-slim
+    container_name: learning-web
+    hostname: web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src/web:/app
+      - ./logs:/app/logs
+      - ./src/spark_analysis:/app/spark_results
+    working_dir: /app
+    command: >
+      bash -c "pip install flask pyhive thrift thrift-sasl requests -i https://pypi.tuna.tsinghua.edu.cn/simple && python app.py"
+    environment:
+      - FLASK_ENV=development
+      - HIVE_HOST=hive-server
+      - HIVE_PORT=10000
+      - HDFS_HOST=namenode
+      - HDFS_PORT=9870
+      - SPARK_MASTER=spark-master
+      - SPARK_PORT=8080
+    depends_on:
+      - hive-server
+      - spark-master
+    networks:
+      - hadoop-cluster
+
+networks:
+  hadoop-cluster:
+    driver: bridge
+
+volumes:
+  namenode_data:
+  datanode1_data:
+  datanode2_data:
+  mysql_data:

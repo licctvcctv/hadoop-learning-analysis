@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Hive配置文件
+  基于Hadoop的大学生线上课程学习行为数据存储与分析系统
+-->
+<configuration>
+    <!-- 元数据库连接配置 -->
+    <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:mysql://mysql:3306/metastore?createDatabaseIfNotExist=true&amp;useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=Asia/Shanghai</value>
+        <description>MySQL元数据库连接URL</description>
+    </property>
+    
+    <property>
+        <name>javax.jdo.option.ConnectionDriverName</name>
+        <value>com.mysql.cj.jdbc.Driver</value>
+        <description>MySQL JDBC驱动</description>
+    </property>
+    
+    <property>
+        <name>javax.jdo.option.ConnectionUserName</name>
+        <value>hive</value>
+        <description>元数据库用户名</description>
+    </property>
+    
+    <property>
+        <name>javax.jdo.option.ConnectionPassword</name>
+        <value>hive123</value>
+        <description>元数据库密码</description>
+    </property>
+    
+    <!-- Hive Metastore配置 -->
+    <property>
+        <name>hive.metastore.uris</name>
+        <value>thrift://hive-server:9083</value>
+        <description>Hive Metastore地址</description>
+    </property>
+    
+    <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>/user/hive/warehouse</value>
+        <description>Hive数据仓库目录</description>
+    </property>
+    
+    <!-- HiveServer2配置 -->
+    <property>
+        <name>hive.server2.thrift.port</name>
+        <value>10000</value>
+        <description>HiveServer2端口</description>
+    </property>
+    
+    <property>
+        <name>hive.server2.thrift.bind.host</name>
+        <value>0.0.0.0</value>
+        <description>HiveServer2绑定地址</description>
+    </property>
+    
+    <property>
+        <name>hive.server2.webui.port</name>
+        <value>10002</value>
+        <description>HiveServer2 Web UI端口</description>
+    </property>
+    
+    <!-- 执行引擎 -->
+    <property>
+        <name>hive.execution.engine</name>
+        <value>mr</value>
+        <description>执行引擎，使用MapReduce</description>
+    </property>
+    
+    <!-- 动态分区配置 -->
+    <property>
+        <name>hive.exec.dynamic.partition</name>
+        <value>true</value>
+        <description>启用动态分区</description>
+    </property>
+    
+    <property>
+        <name>hive.exec.dynamic.partition.mode</name>
+        <value>nonstrict</value>
+        <description>动态分区模式</description>
+    </property>
+    
+    <property>
+        <name>hive.exec.max.dynamic.partitions</name>
+        <value>10000</value>
+        <description>最大动态分区数</description>
+    </property>
+    
+    <property>
+        <name>hive.exec.max.dynamic.partitions.pernode</name>
+        <value>1000</value>
+        <description>每个节点最大动态分区数</description>
+    </property>
+    
+    <!-- 本地模式 -->
+    <property>
+        <name>hive.exec.mode.local.auto</name>
+        <value>true</value>
+        <description>自动启用本地模式</description>
+    </property>
+    
+    <!-- 日志配置 -->
+    <property>
+        <name>hive.server2.logging.operation.enabled</name>
+        <value>true</value>
+        <description>启用操作日志</description>
+    </property>
+    
+    <property>
+        <name>hive.server2.logging.operation.log.location</name>
+        <value>/opt/hive/logs/operation_logs</value>
+        <description>操作日志目录</description>
+    </property>
+    
+    <!-- 权限配置 -->
+    <property>
+        <name>hive.metastore.event.db.notification.api.auth</name>
+        <value>false</value>
+    </property>
+    
+    <property>
+        <name>hive.server2.enable.doAs</name>
+        <value>false</value>
+    </property>
+</configuration>

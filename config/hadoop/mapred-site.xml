@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  MapReduce配置文件
+  基于Hadoop的大学生线上课程学习行为数据存储与分析系统
+-->
+<configuration>
+    <!-- MapReduce框架 -->
+    <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+        <description>使用YARN作为MapReduce执行框架</description>
+    </property>
+    
+    <!-- JobHistory Server -->
+    <property>
+        <name>mapreduce.jobhistory.address</name>
+        <value>resourcemanager:10020</value>
+        <description>JobHistory Server地址</description>
+    </property>
+    
+    <property>
+        <name>mapreduce.jobhistory.webapp.address</name>
+        <value>resourcemanager:19888</value>
+        <description>JobHistory Server Web UI地址</description>
+    </property>
+    
+    <!-- Map任务内存 -->
+    <property>
+        <name>mapreduce.map.memory.mb</name>
+        <value>1024</value>
+        <description>Map任务内存(MB)</description>
+    </property>
+    
+    <property>
+        <name>mapreduce.map.java.opts</name>
+        <value>-Xmx820m</value>
+        <description>Map任务JVM堆内存</description>
+    </property>
+    
+    <!-- Reduce任务内存 -->
+    <property>
+        <name>mapreduce.reduce.memory.mb</name>
+        <value>2048</value>
+        <description>Reduce任务内存(MB)</description>
+    </property>
+    
+    <property>
+        <name>mapreduce.reduce.java.opts</name>
+        <value>-Xmx1640m</value>
+        <description>Reduce任务JVM堆内存</description>
+    </property>
+    
+    <!-- Application Master内存 -->
+    <property>
+        <name>yarn.app.mapreduce.am.resource.mb</name>
+        <value>1024</value>
+        <description>Application Master内存(MB)</description>
+    </property>
+    
+    <!-- Classpath配置 -->
+    <property>
+        <name>mapreduce.application.classpath</name>
+        <value>/opt/hadoop/share/hadoop/mapreduce/*:/opt/hadoop/share/hadoop/mapreduce/lib/*</value>
+    </property>
+</configuration>

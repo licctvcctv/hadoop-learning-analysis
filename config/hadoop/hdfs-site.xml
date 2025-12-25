@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  HDFS配置文件
+  基于Hadoop的大学生线上课程学习行为数据存储与分析系统
+-->
+<configuration>
+    <!-- 副本数量 -->
+    <property>
+        <name>dfs.replication</name>
+        <value>2</value>
+        <description>HDFS数据副本数，适配2个DataNode</description>
+    </property>
+    
+    <!-- NameNode数据目录 -->
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///data/hdfs/namenode</value>
+        <description>NameNode元数据存储目录</description>
+    </property>
+    
+    <!-- DataNode数据目录 -->
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///data/hdfs/datanode</value>
+        <description>DataNode数据存储目录</description>
+    </property>
+    
+    <!-- NameNode Web UI -->
+    <property>
+        <name>dfs.namenode.http-address</name>
+        <value>namenode:9870</value>
+        <description>NameNode Web UI地址</description>
+    </property>
+    
+    <!-- 权限检查 -->
+    <property>
+        <name>dfs.permissions.enabled</name>
+        <value>false</value>
+        <description>关闭权限检查，简化开发环境</description>
+    </property>
+    
+    <!-- WebHDFS -->
+    <property>
+        <name>dfs.webhdfs.enabled</name>
+        <value>true</value>
+        <description>启用WebHDFS REST API</description>
+    </property>
+    
+    <!-- 块大小 -->
+    <property>
+        <name>dfs.blocksize</name>
+        <value>134217728</value>
+        <description>HDFS块大小128MB</description>
+    </property>
+    
+    <!-- 心跳间隔 -->
+    <property>
+        <name>dfs.heartbeat.interval</name>
+        <value>3</value>
+        <description>DataNode心跳间隔(秒)</description>
+    </property>
+</configuration>

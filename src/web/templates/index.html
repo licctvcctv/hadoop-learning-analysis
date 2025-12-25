@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大学生线上课程学习行为分析系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .header p { font-size: 14px; opacity: 0.9; }
+        .nav { background: #fff; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav a { color: #333; text-decoration: none; margin-right: 20px; padding: 8px 16px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { background: #1e3c72; color: white; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 0 20px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card-title { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .card-value { font-size: 28px; font-weight: bold; color: #333; }
+        .card-value span { font-size: 14px; color: #999; margin-left: 5px; }
+        .charts-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px; }
+        .chart-container { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .chart-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #333; }
+        .chart { height: 300px; }
+        .table-container { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: bold; color: #333; }
+        tr:hover { background: #f8f9fa; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-high { background: #ff4d4f; color: white; }
+        .badge-medium { background: #faad14; color: white; }
+        .badge-low { background: #52c41a; color: white; }
+        @media (max-width: 768px) { .charts-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>大学生线上课程学习行为分析系统</h1>
+        <p>基于Hadoop的大数据存储与分析平台</p>
+    </div>
+    
+    <div class="nav">
+        <a href="/" class="active">数据概览</a>
+        <a href="/monitor">系统监控</a>
+        <a href="/logs">日志查看</a>
+    </div>
+    
+    <div class="container">
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-title">学生总数</div>
+                <div class="card-value" id="total-students">--</div>
+            </div>
+            <div class="card">
+                <div class="card-title">课程总数</div>
+                <div class="card-value" id="total-courses">--</div>
+            </div>
+            <div class="card">
+                <div class="card-title">行为记录数</div>
+                <div class="card-value" id="total-behaviors">--</div>
+            </div>
+            <div class="card">
+                <div class="card-title">总学习时长</div>
+                <div class="card-value" id="total-hours">--<span>小时</span></div>
+            </div>
+            <div class="card">
+                <div class="card-title">人均学习时长</div>
+                <div class="card-value" id="avg-hours">--<span>小时</span></div>
+            </div>
+            <div class="card">
+                <div class="card-title">学生活跃率</div>
+                <div class="card-value" id="active-rate">--<span>%</span></div>
+            </div>
+        </div>
+        
+        <div class="charts-row">
+            <div class="chart-container">
+                <div class="chart-title">课程热度排行</div>
+                <div id="course-chart" class="chart"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">学习时间分布</div>
+                <div id="time-chart" class="chart"></div>
+            </div>
+        </div>
+        
+        <div class="charts-row">
+            <div class="chart-container">
+                <div class="chart-title">行为类型分布</div>
+                <div id="behavior-chart" class="chart"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">学习时长排行榜</div>
+                <div id="ranking-chart" class="chart"></div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <div class="chart-title">学习预警列表</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>学生ID</th>
+                        <th>学生姓名</th>
+                        <th>预警类型</th>
+                        <th>预警详情</th>
+                        <th>预警级别</th>
+                    </tr>
+                </thead>
+                <tbody id="alert-table"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        fetch('/api/summary')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    document.getElementById('total-students').textContent = data.data.total_students;
+                    document.getElementById('total-courses').textContent = data.data.total_courses;
+                    document.getElementById('total-behaviors').textContent = data.data.total_behaviors.toLocaleString();
+                    document.getElementById('total-hours').innerHTML = data.data.total_study_hours.toLocaleString() + '<span>小时</span>';
+                    document.getElementById('avg-hours').innerHTML = data.data.avg_study_hours + '<span>小时</span>';
+                    document.getElementById('active-rate').innerHTML = data.data.active_rate + '<span>%</span>';
+                }
+            });
+        
+        fetch('/api/course_popularity')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    const chart = echarts.init(document.getElementById('course-chart'));
+                    chart.setOption({
+                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'value' },
+                        yAxis: { type: 'category', data: data.data.map(d => d.course_name).reverse() },
+                        series: [{
+                            type: 'bar',
+                            data: data.data.map(d => d.student_count).reverse(),
+                            itemStyle: { color: '#1e3c72' }
+                        }]
+                    });
+                }
+            });
+        
+        fetch('/api/time_distribution')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    const chart = echarts.init(document.getElementById('time-chart'));
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'category', data: data.data.map(d => d.hour + '时') },
+                        yAxis: { type: 'value' },
+                        series: [{
+                            type: 'line',
+                            data: data.data.map(d => d.count),
+                            smooth: true,
+                            areaStyle: { color: 'rgba(30, 60, 114, 0.3)' },
+                            lineStyle: { color: '#1e3c72' },
+                            itemStyle: { color: '#1e3c72' }
+                        }]
+                    });
+                }
+            });
+        
+        fetch('/api/behavior_distribution')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    const chart = echarts.init(document.getElementById('behavior-chart'));
+                    chart.setOption({
+                        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                        legend: { orient: 'vertical', left: 'left' },
+                        series: [{
+                            type: 'pie',
+                            radius: ['40%', '70%'],
+                            avoidLabelOverlap: false,
+                            itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                            label: { show: false },
+                            emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+                            data: data.data.map(d => ({ value: d.count, name: d.name }))
+                        }]
+                    });
+                }
+            });
+        
+        fetch('/api/student_ranking?limit=10')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    const chart = echarts.init(document.getElementById('ranking-chart'));
+                    chart.setOption({
+                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'value', name: '学习时长(小时)' },
+                        yAxis: { type: 'category', data: data.data.map(d => d.student_name).reverse() },
+                        series: [{
+                            type: 'bar',
+                            data: data.data.map(d => d.total_hours).reverse(),
+                            itemStyle: { color: '#2a5298' }
+                        }]
+                    });
+                }
+            });
+        
+        fetch('/api/alerts')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    const tbody = document.getElementById('alert-table');
+                    tbody.innerHTML = data.data.map(alert => {
+                        const typeMap = { 'inactive': '长期未学习', 'low_score': '成绩偏低', 'low_engagement': '参与度低' };
+                        const levelClass = { 'high': 'badge-high', 'medium': 'badge-medium', 'low': 'badge-low' };
+                        const levelText = { 'high': '高', 'medium': '中', 'low': '低' };
+                        return `<tr>
+                            <td>${alert.student_id}</td>
+                            <td>${alert.student_name}</td>
+                            <td>${typeMap[alert.alert_type] || alert.alert_type}</td>
+                            <td>${alert.alert_message || ''}</td>
+                            <td><span class="badge ${levelClass[alert.level]}">${levelText[alert.level]}</span></td>
+                        </tr>`;
+                    }).join('');
+                }
+            });
+    </script>
+</body>
+</html>

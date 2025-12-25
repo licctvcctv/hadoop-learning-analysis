@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+  Hadoop Core配置文件
+  基于Hadoop的大学生线上课程学习行为数据存储与分析系统
+-->
+<configuration>
+    <!-- HDFS默认文件系统 -->
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://namenode:9000</value>
+        <description>HDFS NameNode地址</description>
+    </property>
+    
+    <!-- Hadoop临时目录 -->
+    <property>
+        <name>hadoop.tmp.dir</name>
+        <value>/data/hadoop/tmp</value>
+        <description>Hadoop临时文件目录</description>
+    </property>
+    
+    <!-- 代理用户配置 -->
+    <property>
+        <name>hadoop.proxyuser.root.hosts</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.root.groups</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.hive.hosts</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.hive.groups</name>
+        <value>*</value>
+    </property>
+    
+    <!-- 垃圾回收配置 -->
+    <property>
+        <name>fs.trash.interval</name>
+        <value>1440</value>
+        <description>垃圾回收间隔(分钟)</description>
+    </property>
+</configuration>

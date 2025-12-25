@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日志查看 - 学习行为分析系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .header p { font-size: 14px; opacity: 0.9; }
+        .nav { background: #fff; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav a { color: #333; text-decoration: none; margin-right: 20px; padding: 8px 16px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { background: #1e3c72; color: white; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 0 20px; }
+        .filter-bar { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-group label { font-size: 14px; color: #666; }
+        .filter-group select, .filter-group input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .filter-group select { min-width: 120px; }
+        .filter-group input { min-width: 200px; }
+        .btn { padding: 8px 20px; background: #1e3c72; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #2a5298; }
+        .btn-refresh { background: #52c41a; }
+        .btn-refresh:hover { background: #45a817; }
+        .log-container { background: #1e1e1e; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333; }
+        .log-title { color: #fff; font-size: 16px; }
+        .log-count { color: #888; font-size: 14px; }
+        .log-content { font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.6; max-height: 600px; overflow-y: auto; }
+        .log-line { padding: 4px 0; border-bottom: 1px solid #2d2d2d; }
+        .log-line:hover { background: #2d2d2d; }
+        .log-time { color: #888; }
+        .log-level-INFO { color: #52c41a; }
+        .log-level-WARN { color: #faad14; }
+        .log-level-ERROR { color: #ff4d4f; }
+        .log-level-DEBUG { color: #1890ff; }
+        .log-module { color: #b794f4; }
+        .log-message { color: #e0e0e0; }
+        .empty-log { color: #888; text-align: center; padding: 40px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>日志查看</h1>
+        <p>系统运行日志实时查看</p>
+    </div>
+    
+    <div class="nav">
+        <a href="/">数据概览</a>
+        <a href="/monitor">系统监控</a>
+        <a href="/logs" class="active">日志查看</a>
+    </div>
+    
+    <div class="container">
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>组件:</label>
+                <select id="component">
+                    <option value="all">全部</option>
+                    <option value="web">Web应用</option>
+                    <option value="hadoop">Hadoop</option>
+                    <option value="hive">Hive</option>
+                    <option value="spark">Spark</option>
+                    <option value="flume">Flume</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>级别:</label>
+                <select id="level">
+                    <option value="all">全部</option>
+                    <option value="DEBUG">DEBUG</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARN">WARN</option>
+                    <option value="ERROR">ERROR</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>关键字:</label>
+                <input type="text" id="keyword" placeholder="输入关键字搜索...">
+            </div>
+            <div class="filter-group">
+                <label>行数:</label>
+                <select id="lines">
+                    <option value="50">50行</option>
+                    <option value="100" selected>100行</option>
+                    <option value="200">200行</option>
+                    <option value="500">500行</option>
+                </select>
+            </div>
+            <button class="btn" onclick="loadLogs()">查询</button>
+            <button class="btn btn-refresh" onclick="loadLogs()">刷新</button>
+        </div>
+        
+        <div class="log-container">
+            <div class="log-header">
+                <span class="log-title">系统日志</span>
+                <span class="log-count" id="log-count">共 0 条日志</span>
+            </div>
+            <div class="log-content" id="log-content">
+                <div class="empty-log">点击"查询"按钮加载日志...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function loadLogs() {
+            const component = document.getElementById('component').value;
+            const level = document.getElementById('level').value;
+            const keyword = document.getElementById('keyword').value;
+            const lines = document.getElementById('lines').value;
+            
+            const url = `/api/logs?component=${component}&level=${level}&keyword=${encodeURIComponent(keyword)}&lines=${lines}`;
+            
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('log-content');
+                    const countEl = document.getElementById('log-count');
+                    
+                    if (data.code === 0 && data.data.length > 0) {
+                        countEl.textContent = `共 ${data.data.length} 条日志`;
+                        container.innerHTML = data.data.map(line => formatLogLine(line)).join('');
+                        container.scrollTop = container.scrollHeight;
+                    } else {
+                        countEl.textContent = '共 0 条日志';
+                        container.innerHTML = '<div class="empty-log">暂无日志数据</div>';
+                    }
+                });
+        }
+        
+        function formatLogLine(line) {
+            const match = line.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*(.*)/);
+            if (match) {
+                const [, time, level, module, message] = match;
+                return `<div class="log-line">
+                    <span class="log-time">[${time}]</span>
+                    <span class="log-level-${level}">[${level}]</span>
+                    <span class="log-module">[${module}]</span>
+                    <span class="log-message">${message}</span>
+                </div>`;
+            }
+            return `<div class="log-line"><span class="log-message">${line}</span></div>`;
+        }
+        
+        document.getElementById('keyword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') loadLogs();
+        });
+        
+        loadLogs();
+    </script>
+</body>
+</html>

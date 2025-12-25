@@ -1,0 +1,324 @@
+# ============================================
+# Docker Compose编排文件
+# 基于Hadoop的大学生线上课程学习行为数据存储与分析系统
+# ============================================
+version: '3.8'
+
+services:
+  # ==================== Hadoop HDFS ====================
+  namenode:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: namenode
+    hostname: namenode
+    environment:
+      - HADOOP_ROLE=namenode
+    ports:
+      - "9870:9870"   # HDFS Web UI
+      - "9000:9000"   # HDFS RPC
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./config/hadoop/workers:/opt/hadoop/etc/hadoop/workers
+      - namenode_data:/data/hdfs/namenode
+      - ./logs/hadoop/namenode:/opt/hadoop/logs
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  datanode1:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: datanode1
+    hostname: datanode1
+    environment:
+      - HADOOP_ROLE=datanode
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - datanode1_data:/data/hdfs/datanode
+      - ./logs/hadoop/datanode1:/opt/hadoop/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  datanode2:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: datanode2
+    hostname: datanode2
+    environment:
+      - HADOOP_ROLE=datanode
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - datanode2_data:/data/hdfs/datanode
+      - ./logs/hadoop/datanode2:/opt/hadoop/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== Hadoop YARN ====================
+  resourcemanager:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: resourcemanager
+    hostname: resourcemanager
+    environment:
+      - HADOOP_ROLE=resourcemanager
+    ports:
+      - "8088:8088"   # YARN Web UI
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./logs/hadoop/resourcemanager:/opt/hadoop/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  nodemanager1:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: nodemanager1
+    hostname: nodemanager1
+    environment:
+      - HADOOP_ROLE=nodemanager
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./logs/hadoop/nodemanager1:/opt/hadoop/logs
+    depends_on:
+      resourcemanager:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  nodemanager2:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: nodemanager2
+    hostname: nodemanager2
+    environment:
+      - HADOOP_ROLE=nodemanager
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./logs/hadoop/nodemanager2:/opt/hadoop/logs
+    depends_on:
+      resourcemanager:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== MySQL (Hive Metastore) ====================
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    hostname: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_DATABASE=metastore
+      - MYSQL_USER=hive
+      - MYSQL_PASSWORD=hive123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./logs/mysql:/var/log/mysql
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # ==================== Hive ====================
+  hive-server:
+    build:
+      context: ./docker/hive
+      dockerfile: Dockerfile
+    container_name: hive-server
+    hostname: hive-server
+    ports:
+      - "10000:10000"  # HiveServer2
+      - "10002:10002"  # HiveServer2 Web UI
+      - "9083:9083"    # Hive Metastore
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./config/hive/hive-site.xml:/opt/hive/conf/hive-site.xml
+      - ./scripts/hive:/scripts/hive
+      - ./scripts/init:/scripts/init
+      - ./logs/hive:/opt/hive/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+      resourcemanager:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "10000"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # ==================== Spark ====================
+  spark-master:
+    build:
+      context: ./docker/spark
+      dockerfile: Dockerfile
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_ROLE=master
+    ports:
+      - "8080:8080"   # Spark Master Web UI
+      - "7077:7077"   # Spark Master
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./config/spark/spark-env.sh:/opt/spark/conf/spark-env.sh
+      - ./config/hive/hive-site.xml:/opt/spark/conf/hive-site.xml
+      - ./src/spark_analysis:/opt/spark/work/spark_analysis
+      - ./logs/spark:/opt/spark/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  spark-worker:
+    build:
+      context: ./docker/spark
+      dockerfile: Dockerfile
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      - SPARK_ROLE=worker
+    ports:
+      - "8081:8081"   # Spark Worker Web UI
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./config/spark/spark-env.sh:/opt/spark/conf/spark-env.sh
+      - ./config/hive/hive-site.xml:/opt/spark/conf/hive-site.xml
+      - ./src/spark_analysis:/opt/spark/work/spark_analysis
+      - ./logs/spark:/opt/spark/logs
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== Flume ====================
+  flume:
+    build:
+      context: ./docker/flume
+      dockerfile: Dockerfile
+    container_name: flume
+    hostname: flume
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/flume/flume.conf:/opt/flume/conf/flume.conf
+      - ./data/logs:/data/logs
+      - ./logs/flume:/opt/flume/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== Web可视化 ====================
+  web:
+    build:
+      context: ./docker/web
+      dockerfile: Dockerfile
+    container_name: web
+    hostname: web
+    environment:
+      - FLASK_ENV=development
+      - LOG_LEVEL=INFO
+      - HIVE_HOST=hive-server
+      - HIVE_PORT=10000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src/web:/app
+      - ./logs:/app/logs
+    depends_on:
+      hive-server:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+# ==================== 网络配置 ====================
+networks:
+  hadoop-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ==================== 数据卷 ====================
+volumes:
+  namenode_data:
+  datanode1_data:
+  datanode2_data:
+  mysql_data:

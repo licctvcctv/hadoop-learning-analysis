@@ -7,9 +7,13 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
-        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; text-align: center; }
-        .header h1 { font-size: 24px; margin-bottom: 5px; }
-        .header p { font-size: 14px; opacity: 0.9; }
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header-left h1 { font-size: 24px; margin-bottom: 5px; }
+        .header-left p { font-size: 14px; opacity: 0.9; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .user-info { font-size: 14px; }
+        .logout-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .logout-btn:hover { background: rgba(255,255,255,0.3); }
         .nav { background: #fff; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .nav a { color: #333; text-decoration: none; margin-right: 20px; padding: 8px 16px; border-radius: 4px; }
         .nav a:hover, .nav a.active { background: #1e3c72; color: white; }
@@ -43,8 +47,14 @@
 </head>
 <body>
     <div class="header">
-        <h1>日志查看</h1>
-        <p>系统运行日志实时查看</p>
+        <div class="header-left">
+            <h1>日志查看</h1>
+            <p>系统运行日志实时查看</p>
+        </div>
+        <div class="header-right">
+            <span class="user-info" id="userInfo">欢迎您</span>
+            <button class="logout-btn" onclick="location.href='/logout'">退出登录</button>
+        </div>
     </div>
     
     <div class="nav">
@@ -61,7 +71,6 @@
                     <option value="all">全部</option>
                     <option value="web">Web应用</option>
                     <option value="hadoop">Hadoop</option>
-                    <option value="hive">Hive</option>
                     <option value="spark">Spark</option>
                     <option value="flume">Flume</option>
                 </select>
@@ -149,6 +158,15 @@
         });
         
         loadLogs();
+        
+        // 获取用户信息
+        fetch('/api/user/info')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0 && data.data) {
+                    document.getElementById('userInfo').textContent = '欢迎您，' + data.data.name;
+                }
+            });
     </script>
 </body>
 </html>

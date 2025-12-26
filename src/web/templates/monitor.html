@@ -7,9 +7,13 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
-        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; text-align: center; }
-        .header h1 { font-size: 24px; margin-bottom: 5px; }
-        .header p { font-size: 14px; opacity: 0.9; }
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header-left h1 { font-size: 24px; margin-bottom: 5px; }
+        .header-left p { font-size: 14px; opacity: 0.9; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .user-info { font-size: 14px; }
+        .logout-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .logout-btn:hover { background: rgba(255,255,255,0.3); }
         .nav { background: #fff; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .nav a { color: #333; text-decoration: none; margin-right: 20px; padding: 8px 16px; border-radius: 4px; }
         .nav a:hover, .nav a.active { background: #1e3c72; color: white; }
@@ -31,8 +35,6 @@
         .service-icon.hdfs { background: #e3f2fd; color: #1565c0; }
         .service-icon.yarn { background: #fff3e0; color: #ef6c00; }
         .service-icon.spark { background: #fce4ec; color: #c2185b; }
-        .service-icon.hive { background: #e8f5e9; color: #2e7d32; }
-        .service-icon.mysql { background: #f3e5f5; color: #7b1fa2; }
         .service-icon.flume { background: #e0f7fa; color: #00838f; }
         .service-name { font-size: 16px; font-weight: bold; color: #333; }
         .service-desc { font-size: 12px; color: #666; }
@@ -51,8 +53,14 @@
 </head>
 <body>
     <div class="header">
-        <h1>系统监控</h1>
-        <p>Hadoop生态圈组件状态监控</p>
+        <div class="header-left">
+            <h1>系统监控</h1>
+            <p>Hadoop生态圈组件状态监控</p>
+        </div>
+        <div class="header-right">
+            <span class="user-info" id="userInfo">欢迎您</span>
+            <button class="logout-btn" onclick="location.href='/logout'">退出登录</button>
+        </div>
     </div>
     
     <div class="nav">
@@ -239,6 +247,15 @@
             refreshClusterStatus();
             setInterval(refreshClusterStatus, 30000);
         });
+        
+        // 获取用户信息
+        fetch('/api/user/info')
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0 && data.data) {
+                    document.getElementById('userInfo').textContent = '欢迎您，' + data.data.name;
+                }
+            });
     </script>
 </body>
 </html>

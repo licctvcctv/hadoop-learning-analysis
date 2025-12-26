@@ -8,7 +8,7 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 from functools import wraps
 from collections import defaultdict
 import time
@@ -16,6 +16,7 @@ import requests
 import threading
 import random
 import uuid
+import hashlib
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(message)s')
@@ -23,6 +24,7 @@ logger = logging.getLogger('WebApp')
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+app.config['SECRET_KEY'] = 'hadoop-learning-analysis-2025'
 
 # HDFS 配置
 HDFS_HOST = os.environ.get('HDFS_HOST', 'namenode')
@@ -30,11 +32,22 @@ HDFS_PORT = int(os.environ.get('HDFS_PORT', 9870))
 HDFS_PATH = '/user/learning_behavior/raw'
 
 # 缓存配置
-CACHE_TTL = 3  # 缓存3秒
+CACHE_TTL = 3
 _cache = {}
 _cache_time = {}
 
-# 实时统计数据（内存中维护）
+# 用户数据（简单内存存储，生产环境应使用数据库）
+_users = {
+    'admin': {
+        'password': hashlib.md5('admin123'.encode()).hexdigest(),
+        'name': '管理员',
+        'role': 'admin',
+        'created_at': '2025-01-01 00:00:00'
+    }
+}
+_users_lock = threading.Lock()
+
+# 实时统计数据
 _realtime_stats = {
     'total_records': 0,
     'students': set(),
@@ -47,19 +60,110 @@ _realtime_stats = {
 }
 _stats_lock = threading.Lock()
 
+# ==================== 登录验证装饰器 ====================
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            if request.is_json or request.path.startswith('/api/'):
+                return jsonify({'code': 401, 'message': '请先登录'}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ==================== 认证相关路由 ====================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'GET':
+        if 'user' in session:
+            return redirect(url_for('index'))
+        return render_template('login.html')
+    
+    data = request.get_json() if request.is_json else request.form
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    if not username or not password:
+        return jsonify({'code': -1, 'message': '用户名和密码不能为空'})
+    
+    with _users_lock:
+        user = _users.get(username)
+        if not user:
+            return jsonify({'code': -1, 'message': '用户不存在'})
+        
+        pwd_hash = hashlib.md5(password.encode()).hexdigest()
+        if user['password'] != pwd_hash:
+            return jsonify({'code': -1, 'message': '密码错误'})
+        
+        session['user'] = {
+            'username': username,
+            'name': user['name'],
+            'role': user['role']
+        }
+        return jsonify({'code': 0, 'message': '登录成功'})
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'GET':
+        if 'user' in session:
+            return redirect(url_for('index'))
+        return render_template('register.html')
+    
+    data = request.get_json() if request.is_json else request.form
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    confirm = data.get('confirm', '')
+    name = data.get('name', '').strip() or username
+    
+    if not username or not password:
+        return jsonify({'code': -1, 'message': '用户名和密码不能为空'})
+    
+    if len(username) < 3:
+        return jsonify({'code': -1, 'message': '用户名至少3个字符'})
+    
+    if len(password) < 6:
+        return jsonify({'code': -1, 'message': '密码至少6个字符'})
+    
+    if password != confirm:
+        return jsonify({'code': -1, 'message': '两次密码不一致'})
+    
+    with _users_lock:
+        if username in _users:
+            return jsonify({'code': -1, 'message': '用户名已存在'})
+        
+        _users[username] = {
+            'password': hashlib.md5(password.encode()).hexdigest(),
+            'name': name,
+            'role': 'user',
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        return jsonify({'code': 0, 'message': '注册成功'})
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
+@app.route('/api/user/info')
+@login_required
+def api_user_info():
+    return jsonify({'code': 0, 'data': session.get('user')})
+
+
+# ==================== 数据分析函数 ====================
+
 def get_cached(key, ttl=CACHE_TTL):
-    """获取缓存"""
     if key in _cache and time.time() - _cache_time.get(key, 0) < ttl:
         return _cache[key]
     return None
 
 def set_cache(key, value):
-    """设置缓存"""
     _cache[key] = value
     _cache_time[key] = time.time()
 
 def analyze_data():
-    """从内存统计返回分析结果"""
     with _stats_lock:
         total_students = len(_realtime_stats['students'])
         total_hours = round(_realtime_stats['total_duration'] / 3600, 1)
@@ -88,53 +192,37 @@ def analyze_data():
             'alerts': []
         }
         
-        # 学生排行
         student_list = [(sid, dict(data)) for sid, data in _realtime_stats['student_hours'].items()]
         sorted_students = sorted(student_list, key=lambda x: x[1]['hours'], reverse=True)[:10]
         for i, (sid, data) in enumerate(sorted_students, 1):
             result['student_ranking'].append({
-                'rank': i,
-                'student_id': sid,
-                'student_name': data['name'],
-                'total_hours': round(data['hours'], 2),
-                'courses': len(data['courses'])
+                'rank': i, 'student_id': sid, 'student_name': data['name'],
+                'total_hours': round(data['hours'], 2), 'courses': len(data['courses'])
             })
         
-        # 课程热度
         course_list = [(cid, dict(data)) for cid, data in _realtime_stats['course_stats'].items()]
         sorted_courses = sorted(course_list, key=lambda x: len(x[1]['students']), reverse=True)
         for cid, data in sorted_courses:
             result['course_popularity'].append({
-                'course_id': cid,
-                'course_name': data['name'],
-                'student_count': len(data['students']),
-                'total_hours': round(data['hours'], 2)
+                'course_id': cid, 'course_name': data['name'],
+                'student_count': len(data['students']), 'total_hours': round(data['hours'], 2)
             })
         
-        # 行为分布
         total_behaviors = sum(_realtime_stats['behavior_counts'].values())
         for btype, count in sorted(_realtime_stats['behavior_counts'].items(), key=lambda x: x[1], reverse=True):
             result['behavior_distribution'].append({
-                'type': btype,
-                'name': behavior_names.get(btype, btype),
-                'count': count,
-                'percentage': round(count * 100 / max(total_behaviors, 1), 1)
+                'type': btype, 'name': behavior_names.get(btype, btype),
+                'count': count, 'percentage': round(count * 100 / max(total_behaviors, 1), 1)
             })
         
-        # 时间分布
         for hour in range(24):
-            result['time_distribution'].append({
-                'hour': hour,
-                'count': _realtime_stats['hour_counts'].get(hour, 0)
-            })
+            result['time_distribution'].append({'hour': hour, 'count': _realtime_stats['hour_counts'].get(hour, 0)})
         
-        # 预警
         low_hours = sorted(student_list, key=lambda x: x[1]['hours'])[:5]
         for sid, data in low_hours:
             if data['hours'] < 100:
                 result['alerts'].append({
-                    'student_id': sid,
-                    'student_name': data['name'],
+                    'student_id': sid, 'student_name': data['name'],
                     'alert_type': 'low_engagement',
                     'level': 'high' if data['hours'] < 50 else 'medium',
                     'alert_message': f"学习时长仅 {round(data['hours'], 1)} 小时",
@@ -147,20 +235,24 @@ def analyze_data():
 # ==================== 页面路由 ====================
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/monitor')
+@login_required
 def monitor():
     return render_template('monitor.html')
 
 @app.route('/logs')
+@login_required
 def logs_page():
     return render_template('logs.html')
 
 # ==================== API路由 ====================
 
 @app.route('/api/summary')
+@login_required
 def api_summary():
     data = analyze_data()
     if data:
@@ -168,6 +260,7 @@ def api_summary():
     return jsonify({'code': -1, 'message': '无数据'})
 
 @app.route('/api/student_ranking')
+@login_required
 def api_student_ranking():
     limit = request.args.get('limit', 10, type=int)
     data = analyze_data()
@@ -176,6 +269,7 @@ def api_student_ranking():
     return jsonify({'code': -1, 'message': '无数据'})
 
 @app.route('/api/course_popularity')
+@login_required
 def api_course_popularity():
     data = analyze_data()
     if data:
@@ -183,6 +277,7 @@ def api_course_popularity():
     return jsonify({'code': -1, 'message': '无数据'})
 
 @app.route('/api/time_distribution')
+@login_required
 def api_time_distribution():
     data = analyze_data()
     if data:
@@ -190,6 +285,7 @@ def api_time_distribution():
     return jsonify({'code': -1, 'message': '无数据'})
 
 @app.route('/api/behavior_distribution')
+@login_required
 def api_behavior_distribution():
     data = analyze_data()
     if data:
@@ -197,6 +293,7 @@ def api_behavior_distribution():
     return jsonify({'code': -1, 'message': '无数据'})
 
 @app.route('/api/alerts')
+@login_required
 def api_alerts():
     data = analyze_data()
     if data:
@@ -204,52 +301,43 @@ def api_alerts():
     return jsonify({'code': -1, 'message': '无数据'})
 
 @app.route('/api/cluster_status')
+@login_required
 def api_cluster_status():
     status = {'hdfs': {'status': 'unknown'}, 'yarn': {'status': 'unknown'}}
-    
     try:
         url = f'http://{HDFS_HOST}:{HDFS_PORT}/jmx?qry=Hadoop:service=NameNode,name=FSNamesystemState'
         resp = requests.get(url, timeout=3)
         if resp.status_code == 200:
             bean = resp.json().get('beans', [{}])[0]
             status['hdfs'] = {
-                'status': 'running',
-                'capacity': bean.get('CapacityTotal', 0),
-                'used': bean.get('CapacityUsed', 0),
-                'live_nodes': bean.get('NumLiveDataNodes', 0),
+                'status': 'running', 'capacity': bean.get('CapacityTotal', 0),
+                'used': bean.get('CapacityUsed', 0), 'live_nodes': bean.get('NumLiveDataNodes', 0),
                 'dead_nodes': bean.get('NumDeadDataNodes', 0)
             }
     except:
         status['hdfs']['status'] = 'error'
-    
     try:
         resp = requests.get('http://resourcemanager:8088/ws/v1/cluster/metrics', timeout=3)
         if resp.status_code == 200:
             m = resp.json().get('clusterMetrics', {})
-            status['yarn'] = {
-                'status': 'running',
-                'active_nodes': m.get('activeNodes', 0),
-                'apps_running': m.get('appsRunning', 0)
-            }
+            status['yarn'] = {'status': 'running', 'active_nodes': m.get('activeNodes', 0), 'apps_running': m.get('appsRunning', 0)}
     except:
         status['yarn']['status'] = 'error'
-    
     return jsonify({'code': 0, 'data': status})
 
 @app.route('/api/health')
 def api_health():
     return jsonify({'code': 0, 'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
+
 @app.route('/api/logs')
+@login_required
 def api_logs():
-    """返回系统日志"""
     component = request.args.get('component', 'all')
     lines = request.args.get('lines', 100, type=int)
-    
     logs = []
     now = datetime.now()
     
-    # 生成模拟日志数据（基于实际运行状态）
     log_templates = [
         ("[INFO] [HDFS] NameNode 运行正常, 活跃 DataNode: 2", "hadoop"),
         ("[INFO] [HDFS] 数据块复制完成, 副本数: 3", "hadoop"),
@@ -258,8 +346,8 @@ def api_logs():
         ("[INFO] [Spark] 执行器已注册, 内存: 1024MB", "spark"),
         ("[INFO] [Spark] 任务调度完成, 耗时: 2.3s", "spark"),
         ("[INFO] [Spark] 数据分区处理中, 分区数: 8", "spark"),
-        ("[INFO] [Hive] MetaStore 连接正常", "hive"),
-        ("[INFO] [Hive] 查询编译完成", "hive"),
+        ("[INFO] [Spark] DataFrame读取完成", "spark"),
+        ("[INFO] [Spark] 统计分析任务执行中", "spark"),
         ("[INFO] [Web] 数据生成器运行中", "web"),
         ("[INFO] [Web] API 请求处理完成", "web"),
         ("[INFO] [Web] HDFS 数据写入成功", "web"),
@@ -270,28 +358,19 @@ def api_logs():
         ("[INFO] [Flume] 数据采集中, 速率: 100条/秒", "flume"),
     ]
     
-    # 生成最近的日志
-    import random
     for i in range(min(lines, 100)):
         template, comp = random.choice(log_templates)
         if component != 'all' and comp != component:
             continue
-        
-        # 生成时间戳
         seconds_ago = random.randint(0, 300)
         log_time = now - timedelta(seconds=seconds_ago)
         timestamp = log_time.strftime("%Y-%m-%d %H:%M:%S")
-        
         logs.append(f"[{timestamp}] {template}")
     
-    # 添加实际的数据生成日志
     with _stats_lock:
         total = _realtime_stats['total_records']
     logs.insert(0, f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] [INFO] [Web] 实时数据生成中, 当前总记录数: {total}")
-    
-    # 按时间排序
     logs.sort(reverse=True)
-    
     return jsonify({'code': 0, 'data': logs[:lines]})
 
 # ==================== 后台数据生成器 ====================
@@ -315,81 +394,56 @@ COURSES = [
 BEHAVIORS = ["video_watch", "homework_submit", "quiz_complete", "forum_post", "material_download"]
 
 def generate_and_write():
-    """生成数据并写入 HDFS，同时更新内存统计"""
     global _realtime_stats
-    
     while True:
         try:
-            # 生成一批数据
             records = []
             batch_size = random.randint(10, 30)
-            
             for _ in range(batch_size):
                 student = random.choice(STUDENTS)
                 course = random.choice(COURSES)
                 behavior = random.choice(BEHAVIORS)
-                
                 duration_map = {
-                    "video_watch": (300, 3600),
-                    "homework_submit": (1800, 7200),
-                    "quiz_complete": (600, 1800),
-                    "forum_post": (120, 600),
-                    "material_download": (60, 300),
+                    "video_watch": (300, 3600), "homework_submit": (1800, 7200),
+                    "quiz_complete": (600, 1800), "forum_post": (120, 600), "material_download": (60, 300),
                 }
                 dur = duration_map[behavior]
                 duration = random.randint(dur[0], dur[1])
-                
                 record = {
-                    "record_id": str(uuid.uuid4()),
-                    "student_id": student[0],
-                    "student_name": student[1],
-                    "course_id": course[0],
-                    "course_name": course[1],
-                    "behavior_type": behavior,
-                    "duration": duration,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "record_id": str(uuid.uuid4()), "student_id": student[0], "student_name": student[1],
+                    "course_id": course[0], "course_name": course[1], "behavior_type": behavior,
+                    "duration": duration, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 records.append(record)
-                
-                # 更新内存统计
                 with _stats_lock:
                     _realtime_stats['total_records'] += 1
                     _realtime_stats['students'].add(student[0])
                     _realtime_stats['courses'].add(course[0])
                     _realtime_stats['total_duration'] += duration
                     _realtime_stats['behavior_counts'][behavior] += 1
-                    
                     hour = datetime.now().hour
                     _realtime_stats['hour_counts'][hour] += 1
-                    
                     _realtime_stats['student_hours'][student[0]]['hours'] += duration / 3600
                     _realtime_stats['student_hours'][student[0]]['courses'].add(course[0])
                     _realtime_stats['student_hours'][student[0]]['name'] = student[1]
-                    
                     _realtime_stats['course_stats'][course[0]]['students'].add(student[0])
                     _realtime_stats['course_stats'][course[0]]['hours'] += duration / 3600
                     _realtime_stats['course_stats'][course[0]]['name'] = course[1]
-            
-            # 写入 HDFS (异步，不阻塞)
             try:
                 filename = f"realtime_{datetime.now().strftime('%H%M%S')}_{random.randint(1000,9999)}.json"
                 url = f"http://{HDFS_HOST}:{HDFS_PORT}/webhdfs/v1{HDFS_PATH}/{filename}?op=CREATE&overwrite=true"
-                
                 resp = requests.put(url, allow_redirects=False, timeout=2)
                 if resp.status_code == 307:
                     data_url = resp.headers['Location']
                     content = "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
                     requests.put(data_url, data=content.encode('utf-8'), timeout=3)
             except:
-                pass  # HDFS 写入失败不影响内存统计
-            
+                pass
             logger.info(f"生成 {len(records)} 条数据, 总计 {_realtime_stats['total_records']}")
         except Exception as e:
             logger.error(f"数据生成失败: {e}")
-        
-        time.sleep(2)  # 每2秒生成一批
+        time.sleep(2)
 
-# 启动后台生成线程
 generator_thread = threading.Thread(target=generate_and_write, daemon=True)
 generator_thread.start()
 

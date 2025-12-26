@@ -64,39 +64,13 @@ main() {
     log_info "创建数据目录结构..."
     
     # 学习行为数据根目录
-    create_directory "/user/learning_behavior"
-    
-    # ODS层 - 原始数据目录（Flume写入）
-    # 与 Flume 配置的 hdfs.path 对齐
-    create_directory "/user/learning_behavior/raw"
-    
-    # DWD层 - 明细数据目录
-    create_directory "/user/learning_behavior/dwd"
-    
-    # DWS层 - 汇总数据目录
-    create_directory "/user/learning_behavior/dws"
-    create_directory "/user/learning_behavior/dws/student_summary"
-    create_directory "/user/learning_behavior/dws/course_popularity"
-    create_directory "/user/learning_behavior/dws/hourly_distribution"
-    create_directory "/user/learning_behavior/dws/weekly_distribution"
-    create_directory "/user/learning_behavior/dws/behavior_distribution"
-    
-    # ADS层 - 应用数据目录
-    create_directory "/user/learning_behavior/ads"
-    create_directory "/user/learning_behavior/ads/learning_alerts"
-    create_directory "/user/learning_behavior/ads/learning_ranking"
-    create_directory "/user/learning_behavior/ads/data_summary"
-    
-    # Hive数据仓库目录
-    create_directory "/user/hive/warehouse"
-    create_directory "/user/hive/warehouse/learning_behavior.db"
-    
-    # 临时目录
-    create_directory "/tmp"
-    create_directory "/tmp/hive"
+    create_directory "/learning_data"
     
     # Spark检查点目录
     create_directory "/spark/checkpoint"
+    
+    # 临时目录
+    create_directory "/tmp"
     
     log_info "=========================================="
     log_info "HDFS目录初始化完成"
@@ -104,7 +78,7 @@ main() {
     
     # 显示目录结构
     log_info "HDFS目录结构:"
-    hdfs dfs -ls -R /user/learning_behavior 2>/dev/null | head -50
+    hdfs dfs -ls / 2>/dev/null
 }
 
 main "$@"

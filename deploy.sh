@@ -52,6 +52,7 @@ check_docker() {
     log_info "Docker环境检查通过"
 }
 
+
 # 创建必要的目录
 create_directories() {
     log_step "创建必要的目录..."
@@ -62,11 +63,9 @@ create_directories() {
     mkdir -p logs/hadoop/resourcemanager
     mkdir -p logs/hadoop/nodemanager1
     mkdir -p logs/hadoop/nodemanager2
-    mkdir -p logs/hive
     mkdir -p logs/spark
     mkdir -p logs/flume
     mkdir -p logs/web
-    mkdir -p logs/mysql
     mkdir -p logs/data-generator
     mkdir -p data/logs
     
@@ -77,7 +76,6 @@ create_directories() {
 build_images() {
     log_step "构建Docker镜像..."
     
-    # 使用docker compose或docker-compose
     if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
     else
@@ -153,19 +151,6 @@ wait_for_services() {
         waited=$((waited + interval))
         log_info "等待中... ($waited/$max_wait 秒)"
     done
-    
-    # 等待HiveServer2
-    waited=0
-    log_info "等待HiveServer2..."
-    while [ $waited -lt $max_wait ]; do
-        if nc -z localhost 10000 2>/dev/null; then
-            log_info "HiveServer2已就绪"
-            break
-        fi
-        sleep $interval
-        waited=$((waited + interval))
-        log_info "等待中... ($waited/$max_wait 秒)"
-    done
 }
 
 # 显示服务状态
@@ -191,12 +176,11 @@ show_urls() {
     echo "============================================"
     echo ""
     echo "访问地址："
-    echo "  - HDFS NameNode:      http://localhost:9870"
+    echo "  - HDFS NameNode:       http://localhost:9870"
     echo "  - YARN ResourceManager: http://localhost:8088"
-    echo "  - Spark Master:       http://localhost:8080"
-    echo "  - Spark Worker:       http://localhost:8081"
-    echo "  - HiveServer2:        jdbc:hive2://localhost:10000"
-    echo "  - Web可视化界面:       http://localhost:5000"
+    echo "  - Spark Master:        http://localhost:8080"
+    echo "  - Spark Worker:        http://localhost:8081"
+    echo "  - Web可视化界面:        http://localhost:5000"
     echo ""
     echo "日志目录: ./logs/"
     echo ""

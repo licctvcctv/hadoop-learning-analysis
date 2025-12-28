@@ -14,10 +14,11 @@ def main():
     print("开始 Spark 数据分析")
     print("=" * 50)
     
-    # 创建 SparkSession
+    # 创建 SparkSession - 虚拟机配置
+    SPARK_MASTER = os.environ.get('SPARK_MASTER', 'spark://10.90.100.101:7077')
     spark = SparkSession.builder \
         .appName("LearningBehaviorAnalysis") \
-        .master("spark://spark-master:7077") \
+        .master(SPARK_MASTER) \
         .config("spark.executor.memory", "1g") \
         .config("spark.driver.memory", "1g") \
         .getOrCreate()
@@ -25,9 +26,10 @@ def main():
     spark.sparkContext.setLogLevel("WARN")
     
     try:
-        # 读取 HDFS 数据
+        # 读取 HDFS 数据 - 虚拟机配置
         print("\n[1] 读取 HDFS 数据...")
-        df = spark.read.json("hdfs://namenode:9000/user/learning_behavior/raw/")
+        HDFS_NAMENODE = os.environ.get('HDFS_NAMENODE', '10.90.100.101:9000')
+        df = spark.read.json(f"hdfs://{HDFS_NAMENODE}/user/learning_behavior/raw/")
         
         total_records = df.count()
         print(f"    读取到 {total_records} 条记录")

@@ -1,0 +1,188 @@
+# ============================================
+# Docker Compose - Hadoop + Spark + Web (无 Hive)
+# ============================================
+version: '3.8'
+
+services:
+  # ==================== Hadoop HDFS ====================
+  namenode:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: namenode
+    hostname: namenode
+    environment:
+      - HADOOP_ROLE=namenode
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./config/hadoop/workers:/opt/hadoop/etc/hadoop/workers
+      - namenode_data:/data/hdfs/namenode
+      - ./logs/hadoop/namenode:/opt/hadoop/logs
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  datanode:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: datanode
+    hostname: datanode
+    environment:
+      - HADOOP_ROLE=datanode
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - datanode_data:/data/hdfs/datanode
+      - ./logs/hadoop/datanode:/opt/hadoop/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== Hadoop YARN ====================
+  resourcemanager:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: resourcemanager
+    hostname: resourcemanager
+    environment:
+      - HADOOP_ROLE=resourcemanager
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./logs/hadoop/resourcemanager:/opt/hadoop/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  nodemanager:
+    build:
+      context: ./docker/hadoop
+      dockerfile: Dockerfile
+    container_name: nodemanager
+    hostname: nodemanager
+    environment:
+      - HADOOP_ROLE=nodemanager
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
+      - ./config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
+      - ./logs/hadoop/nodemanager:/opt/hadoop/logs
+    depends_on:
+      resourcemanager:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== Spark ====================
+  spark-master:
+    build:
+      context: ./docker/spark
+      dockerfile: Dockerfile
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_ROLE=master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./config/spark/spark-env.sh:/opt/spark/conf/spark-env.sh
+      - ./src/spark_analysis:/opt/spark/work/spark_analysis
+      - ./logs/spark:/opt/spark/logs
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  spark-worker:
+    build:
+      context: ./docker/spark
+      dockerfile: Dockerfile
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      - SPARK_ROLE=worker
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./config/hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./config/spark/spark-env.sh:/opt/spark/conf/spark-env.sh
+      - ./src/spark_analysis:/opt/spark/work/spark_analysis
+      - ./logs/spark:/opt/spark/logs
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+  # ==================== Web 可视化 ====================
+  web:
+    build:
+      context: ./docker/web
+      dockerfile: Dockerfile
+    container_name: web
+    hostname: web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src/web:/app
+      - ./logs/web:/app/logs
+    environment:
+      - FLASK_ENV=development
+      - HDFS_HOST=namenode
+      - HDFS_PORT=9870
+    depends_on:
+      namenode:
+        condition: service_healthy
+    networks:
+      - hadoop-network
+
+networks:
+  hadoop-network:
+    driver: bridge
+
+volumes:
+  namenode_data:
+  datanode_data:

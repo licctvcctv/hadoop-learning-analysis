@@ -26,8 +26,8 @@ app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 app.config['SECRET_KEY'] = 'hadoop-learning-analysis-2025'
 
-# HDFS 配置
-HDFS_HOST = os.environ.get('HDFS_HOST', 'namenode')
+# HDFS 配置 - 虚拟机
+HDFS_HOST = os.environ.get('HDFS_HOST', '10.90.100.101')
 HDFS_PORT = int(os.environ.get('HDFS_PORT', 9870))
 HDFS_PATH = '/user/learning_behavior/raw'
 
